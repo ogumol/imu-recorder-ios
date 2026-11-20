@@ -1,0 +1,423 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b1220">
+  <meta name="description" content="Registra datos IMU del iPhone mediante DeviceMotion y expórtalos como CSV.">
+  <title>IMU Recorder — iPhone</title>
+  <style>
+    :root { color-scheme: dark; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; --bg:#0b1220; --panel:#151e2e; --line:#2a374b; --text:#edf5ff; --muted:#9eafc6; --mint:#67e5bc; --blue:#68c6ff; --amber:#ffcb84; }
+    * { box-sizing: border-box; }
+    body { margin:0; min-height:100vh; background:radial-gradient(ellipse at 75% -15%, #1b3752 0, transparent 48%),var(--bg); color:var(--text); }
+    button { font:inherit; cursor:pointer; transition:background .15s,transform .15s; -webkit-tap-highlight-color:transparent; }
+    button:active:not(:disabled) { transform:scale(.98); }
+    button:disabled { opacity:.4; cursor:not-allowed; }
+    .wrap { max-width:950px; margin:0 auto; padding:28px 18px calc(45px + env(safe-area-inset-bottom)); }
+    .top { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; margin-bottom:21px; }
+    .eyebrow { text-transform:uppercase; letter-spacing:.18em; color:var(--mint); font-size:11px; font-weight:750; margin:0 0 10px; }
+    h1 { font-size:clamp(28px,6vw,43px); letter-spacing:-.045em; line-height:1.08; margin:0 0 9px; }
+    .sub { margin:0; color:var(--muted); line-height:1.5; font-size:14px; }
+    .mark { display:grid; place-items:center; border:1px solid #3c6174; color:var(--mint); background:#163142; border-radius:17px; width:49px; height:49px; font-size:26px; flex:none; }
+    .panel { background:rgba(21,30,46,.94); border:1px solid var(--line); border-radius:19px; padding:20px; box-shadow:0 8px 22px #0000001b; margin-bottom:16px; }
+    .panel h2 { font-size:16px; letter-spacing:-.02em; margin:0; }
+    .panel-title { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:16px; }
+    .pill { border:1px solid #425064; color:var(--muted); font-size:12px; padding:6px 11px; border-radius:99px; white-space:nowrap; }
+    .pill.ready { border-color:#26765d; background:#16382f; color:var(--mint); }
+    .pill.recording { border-color:#915346; background:#4c2825; color:#ffb6a8; }
+    .controls { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+    .btn { border:1px solid var(--line); border-radius:12px; padding:13px 12px; min-height:47px; background:#263448; color:var(--text); font-weight:650; font-size:14px; }
+    .btn.primary { background:var(--mint); color:#09221b; border-color:var(--mint); }
+    .btn.danger { background:#70382f; border-color:#955047; color:#ffebe7; }
+    .btn.ghost { background:#172334; }
+    .meta { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin-top:17px; }
+    .meta div { padding:11px; background:#101a29; border-radius:11px; border:1px solid #202d41; min-width:0; }
+    .meta small { display:block; color:var(--muted); font-size:11px; margin-bottom:5px; }
+    .meta strong { font-size:18px; font-variant-numeric:tabular-nums; }
+    #status { margin:13px 0 0; color:var(--muted); font-size:13px; line-height:1.5; min-height:20px; }
+    #status.error { color:#ffb1a5; }
+    .sensor-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:9px; }
+    .sensor { padding:12px; min-width:0; background:#101a29; border:1px solid #26354a; border-radius:12px; }
+    .sensor small { color:var(--muted); font-size:11px; display:block; margin-bottom:8px; }
+    .sensor strong { font-size:clamp(15px,3.4vw,22px); font-variant-numeric:tabular-nums; letter-spacing:-.035em; display:block; white-space:nowrap; }
+    .sensor.missing { opacity:.62; border-style:dashed; }
+    .group-label { color:#b7c7db; font-size:12px; font-weight:650; margin:14px 0 9px; }
+    .group-label:first-of-type { margin-top:0; }
+    .unit { color:var(--muted); font-weight:400; }
+    .note { border-left:3px solid #5c748c; padding:8px 0 8px 13px; color:var(--muted); font-size:12px; line-height:1.55; margin:15px 0 0; }
+    .graph-layout { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+    .graph { min-width:0; border-radius:12px; background:#101a29; border:1px solid #253349; padding:10px; }
+    .graph-label { font-size:12px; font-weight:700; margin-bottom:6px; }
+    .graph canvas { width:100%; height:140px; display:block; }
+    .legend { display:flex; gap:14px; font-size:12px; color:var(--muted); margin-top:13px; }
+    .legend b { margin-right:4px; }
+    .export { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:9px; }
+    .foot { font-size:12px; color:var(--muted); line-height:1.6; padding:0 5px; }
+    code { color:#d1ebff; }
+    @media (max-width:600px) { .wrap { padding-top:24px; } .panel { padding:15px; border-radius:16px; } .graph-layout { grid-template-columns:1fr; } .export { grid-template-columns:1fr 1fr; } .export button:first-child { grid-column:span 2; } }
+    @media (max-width:360px) { .sensor-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } .meta strong { font-size:15px; } }
+  </style>
+</head>
+<body>
+<main class="wrap">
+  <header class="top">
+    <div>
+      <p class="eyebrow">Cyber-Physical Systems · Safari compatible</p>
+      <h1>IMU Recorder <span style="color:var(--mint)">/ iPhone</span></h1>
+      <p class="sub">Acelerómetro y giroscopio en tiempo real. Grabación local y exportación CSV.</p>
+    </div>
+    <span class="mark" aria-hidden="true">⌁</span>
+  </header>
+
+  <section class="panel" aria-label="Controles">
+    <div class="panel-title">
+      <h2>Captura de sensores</h2>
+      <span class="pill" id="state-pill">Desconectado</span>
+    </div>
+    <div class="controls">
+      <button class="btn primary" id="connect-btn" type="button">Activar sensores</button>
+      <button class="btn ghost" id="disconnect-btn" disabled type="button">Detener sensores</button>
+      <button class="btn primary" id="record-btn" disabled type="button">Iniciar grabación</button>
+      <button class="btn ghost" id="finish-btn" disabled type="button">Detener grabación</button>
+    </div>
+    <div class="meta" aria-live="off">
+      <div><small>Muestras</small><strong id="samples">0</strong></div>
+      <div><small>Duración</small><strong id="duration">0.0 s</strong></div>
+      <div><small>Frecuencia aprox.</small><strong id="frequency">— Hz</strong></div>
+    </div>
+    <p id="status" role="status" aria-live="polite">Pulsa «Activar sensores» y permite el acceso al movimiento cuando Safari lo solicite.</p>
+  </section>
+
+  <section class="panel" aria-label="Lecturas en vivo">
+    <div class="panel-title"><h2>Valores en tiempo real</h2><span class="pill">6 ejes disponibles</span></div>
+    <p class="group-label">Acelerómetro <span class="unit">· m/s² · incluye gravedad</span></p>
+    <div class="sensor-grid">
+      <div class="sensor"><small>accel x</small><strong id="ax">—</strong></div>
+      <div class="sensor"><small>accel y</small><strong id="ay">—</strong></div>
+      <div class="sensor"><small>accel z</small><strong id="az">—</strong></div>
+    </div>
+    <p class="group-label">Giroscopio <span class="unit">· grados/s</span></p>
+    <div class="sensor-grid">
+      <div class="sensor"><small>gyro x</small><strong id="gx">—</strong></div>
+      <div class="sensor"><small>gyro y</small><strong id="gy">—</strong></div>
+      <div class="sensor"><small>gyro z</small><strong id="gz">—</strong></div>
+    </div>
+    <p class="group-label">Magnetómetro <span class="unit">· µT</span></p>
+    <div class="sensor-grid">
+      <div class="sensor missing"><small>mag x</small><strong>—</strong></div>
+      <div class="sensor missing"><small>mag y</small><strong>—</strong></div>
+      <div class="sensor missing"><small>mag z</small><strong>—</strong></div>
+    </div>
+    <p class="note">Safari en iPhone no permite leer directamente los tres ejes del magnetómetro. Se conservan esas columnas en el CSV, pero vacías; no se inventan medidas. Los ejes del giroscopio se mapean desde <code>rotationRate.beta</code> (X), <code>gamma</code> (Y) y <code>alpha</code> (Z).</p>
+  </section>
+
+  <section class="panel" aria-label="Gráficas">
+    <div class="panel-title"><h2>Señales en directo</h2><span class="pill">Últimas 150 muestras</span></div>
+    <div class="graph-layout">
+      <div class="graph"><div class="graph-label">Aceleración (m/s²)</div><canvas id="acc-chart" role="img" aria-label="Evolución del acelerómetro"></canvas></div>
+      <div class="graph"><div class="graph-label">Velocidad angular (°/s)</div><canvas id="gyro-chart" role="img" aria-label="Evolución del giroscopio"></canvas></div>
+    </div>
+    <div class="legend"><span><b style="color:#67cfff">●</b>X</span><span><b style="color:#ffcb84">●</b>Y</span><span><b style="color:#bba5ff">●</b>Z</span></div>
+  </section>
+
+  <section class="panel" aria-label="Exportación">
+    <div class="panel-title"><h2>Exportar mediciones</h2><span class="pill">CSV · sin servidores</span></div>
+    <div class="export">
+      <button class="btn primary" type="button" id="download-btn" disabled>Descargar CSV</button>
+      <button class="btn ghost" type="button" id="share-btn" disabled>Compartir / Guardar</button>
+      <button class="btn ghost" type="button" id="copy-btn" disabled>Copiar CSV</button>
+    </div>
+    <p class="note">El archivo contiene fecha/hora ISO, tiempo transcurrido (ms), aceleración X/Y/Z y velocidad angular X/Y/Z. Las columnas del magnetómetro se dejan vacías para mantener el formato de 9 canales. El teléfono no envía información a ninguna web.</p>
+  </section>
+  <p class="foot">Necesita abrirse desde <strong>HTTPS</strong> (por ejemplo, GitHub Pages) en Safari. Mantén la página en primer plano mientras grabas; iOS puede suspender la captura si bloqueas la pantalla o cambias de aplicación.</p>
+</main>
+<script>
+(() => {
+  'use strict';
+  const $ = id => document.getElementById(id);
+  const connectBtn = $('connect-btn');
+  const disconnectBtn = $('disconnect-btn');
+  const recordBtn = $('record-btn');
+  const finishBtn = $('finish-btn');
+  const downloadBtn = $('download-btn');
+  const shareBtn = $('share-btn');
+  const copyBtn = $('copy-btn');
+  const readings = { ax:$('ax'), ay:$('ay'), az:$('az'), gx:$('gx'), gy:$('gy'), gz:$('gz') };
+  const headers = [
+    'timestamp_iso','elapsed_ms','accel_x_m_s2','accel_y_m_s2','accel_z_m_s2',
+    'gyro_x_deg_s','gyro_y_deg_s','gyro_z_deg_s','mag_x_uT','mag_y_uT','mag_z_uT'
+  ];
+  const MAX_ROWS = 120000;
+  const CHART_LENGTH = 150;
+  const chartColors = ['#67cfff','#ffcb84','#bba5ff'];
+  const accHistory = [];
+  const gyroHistory = [];
+  let connected = false;
+  let received = false;
+  let recording = false;
+  let samples = [];
+  let startedAt = 0;
+  let elapsedAtStop = 0;
+  let lastMotionAt = 0;
+  let rateHz = null;
+  let lastUiAt = 0;
+  let lastGraphAt = 0;
+  let waitingTimer = null;
+
+  function setStatus(message, error=false) {
+    $('status').textContent = message;
+    $('status').classList.toggle('error', error);
+  }
+  function setPill(message, kind='') {
+    $('state-pill').textContent = message;
+    $('state-pill').className = 'pill ' + kind;
+  }
+  function numberOrNull(value) {
+    return typeof value === 'number' && Number.isFinite(value) ? value : null;
+  }
+  function sensorValue(value) {
+    return value === null ? '—' : value.toFixed(3);
+  }
+  function csvNumber(value) {
+    return value === null ? '' : value.toFixed(6);
+  }
+  function refreshControls() {
+    connectBtn.disabled = connected;
+    disconnectBtn.disabled = !connected;
+    recordBtn.disabled = !connected || !received || recording;
+    finishBtn.disabled = !recording;
+    const hasData = samples.length > 0;
+    downloadBtn.disabled = !hasData;
+    shareBtn.disabled = !hasData;
+    copyBtn.disabled = !hasData;
+  }
+  function showMeasurements(row) {
+    for (const key of Object.keys(readings)) readings[key].textContent = sensorValue(row[key]);
+    $('frequency').textContent = rateHz === null ? '— Hz' : `${rateHz.toFixed(1)} Hz`;
+  }
+  function elapsedMs() {
+    return recording ? performance.now() - startedAt : elapsedAtStop;
+  }
+  function refreshStats() {
+    $('samples').textContent = samples.length.toLocaleString('es-ES');
+    $('duration').textContent = `${(elapsedMs() / 1000).toFixed(1)} s`;
+  }
+  function onMotion(event) {
+    if (!connected) return;
+    const raw = event.accelerationIncludingGravity;
+    const fallback = event.acceleration;
+    const hasRaw = raw && [raw.x,raw.y,raw.z].some(v => numberOrNull(v) !== null);
+    const accel = hasRaw ? raw : fallback;
+    const gyro = event.rotationRate;
+    const row = {
+      timestamp: new Date().toISOString(),
+      ax: numberOrNull(accel?.x), ay: numberOrNull(accel?.y), az: numberOrNull(accel?.z),
+      // DeviceMotion rotationRate uses beta=X, gamma=Y, alpha=Z in degrees per second.
+      gx: numberOrNull(gyro?.beta), gy: numberOrNull(gyro?.gamma), gz: numberOrNull(gyro?.alpha)
+    };
+    const hasAnyData = [row.ax,row.ay,row.az,row.gx,row.gy,row.gz].some(v => v !== null);
+    if (!hasAnyData) return;
+
+    const now = performance.now();
+    if (lastMotionAt > 0) {
+      const delta = now - lastMotionAt;
+      if (delta > 2 && delta < 2000) {
+        const instantaneous = 1000 / delta;
+        rateHz = rateHz === null ? instantaneous : (rateHz * .9 + instantaneous * .1);
+      }
+    }
+    lastMotionAt = now;
+
+    if (!received) {
+      received = true;
+      setPill('Sensores activos', 'ready');
+      clearTimeout(waitingTimer);
+      setStatus('Sensores activos. Ya puedes iniciar la grabación.');
+      refreshControls();
+    }
+    if (recording) {
+      samples.push({ ...row, elapsed: now - startedAt });
+      if (samples.length >= MAX_ROWS) {
+        stopRecording();
+        setStatus(`Se alcanzó el límite de ${MAX_ROWS.toLocaleString('es-ES')} muestras. Guarda el CSV antes de comenzar otra grabación.`, true);
+      }
+    }
+    accHistory.push([row.ax,row.ay,row.az]);
+    gyroHistory.push([row.gx,row.gy,row.gz]);
+    if (accHistory.length > CHART_LENGTH) accHistory.shift();
+    if (gyroHistory.length > CHART_LENGTH) gyroHistory.shift();
+    if (now - lastUiAt > 90) {
+      showMeasurements(row);
+      refreshStats();
+      lastUiAt = now;
+    }
+    if (now - lastGraphAt > 95) {
+      drawCharts();
+      lastGraphAt = now;
+    }
+  }
+  async function connect() {
+    if (connected) return;
+    if (!window.isSecureContext) {
+      setStatus('Se necesita HTTPS. Sube esta página a GitHub Pages y ábrela en Safari.', true);
+      return;
+    }
+    if (typeof window.DeviceMotionEvent === 'undefined') {
+      setStatus('Este navegador no ofrece DeviceMotionEvent. Abre la página en Safari desde tu iPhone.', true);
+      return;
+    }
+    connectBtn.disabled = true;
+    try {
+      // iOS requires the permission request directly from a user-initiated tap.
+      if (typeof DeviceMotionEvent.requestPermission === 'function') {
+        const answer = await DeviceMotionEvent.requestPermission();
+        if (answer !== 'granted') throw new Error('Safari no concedió permiso de movimiento. Revisa los permisos del sitio y vuelve a intentarlo.');
+      }
+      window.addEventListener('devicemotion', onMotion, {passive:true});
+      connected = true;
+      received = false;
+      lastMotionAt = 0;
+      rateHz = null;
+      setPill('Esperando datos');
+      setStatus('Permiso concedido. Mueve ligeramente el iPhone para comprobar las lecturas.');
+      refreshControls();
+      waitingTimer = setTimeout(() => {
+        if (connected && !received) setStatus('No llegan lecturas. Mantén Safari en primer plano, desactiva el modo de ahorro y vuelve a probar.', true);
+      }, 5000);
+    } catch (error) {
+      setStatus(error?.message || 'No se pudieron activar los sensores.', true);
+      refreshControls();
+    }
+  }
+  function stopSensors() {
+    if (recording) stopRecording();
+    window.removeEventListener('devicemotion', onMotion);
+    clearTimeout(waitingTimer);
+    connected = false;
+    received = false;
+    setPill('Desconectado');
+    setStatus('Sensores detenidos. Si grabaste datos, puedes descargarlos o compartirlos.');
+    refreshControls();
+  }
+  function startRecording() {
+    if (!connected || !received || recording) return;
+    samples = [];
+    startedAt = performance.now();
+    elapsedAtStop = 0;
+    recording = true;
+    setPill('● Grabando', 'recording');
+    setStatus('Grabación en curso. Mantén Safari abierto y el teléfono desbloqueado.');
+    refreshStats();
+    refreshControls();
+  }
+  function stopRecording() {
+    if (!recording) return;
+    elapsedAtStop = performance.now() - startedAt;
+    recording = false;
+    setPill(connected ? 'Sensores activos' : 'Desconectado', connected ? 'ready' : '');
+    setStatus(`Grabación finalizada: ${samples.length.toLocaleString('es-ES')} muestras. Descarga o comparte el CSV.`);
+    refreshStats();
+    refreshControls();
+  }
+  function csvContent() {
+    const data = [headers.join(',')];
+    for (const r of samples) {
+      data.push([
+        r.timestamp, r.elapsed.toFixed(3), csvNumber(r.ax), csvNumber(r.ay), csvNumber(r.az),
+        csvNumber(r.gx), csvNumber(r.gy), csvNumber(r.gz), '', '', ''
+      ].join(','));
+    }
+    return '\uFEFF' + data.join('\r\n') + '\r\n';
+  }
+  function filename() {
+    return `imu_iphone_${new Date().toISOString().replace(/[:.]/g,'-')}.csv`;
+  }
+  function downloadCsv() {
+    if (!samples.length) return;
+    const blob = new Blob([csvContent()], {type:'text/csv;charset=utf-8'});
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename();
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 15000);
+    setStatus('CSV generado. Comprueba las descargas de Safari o la app Archivos.');
+  }
+  async function shareCsv() {
+    if (!samples.length) return;
+    try {
+      const file = new File([csvContent()], filename(), {type:'text/csv'});
+      if (navigator.canShare && navigator.canShare({files:[file]}) && navigator.share) {
+        await navigator.share({title:'IMU Recorder CSV', files:[file]});
+        setStatus('Se abrió la hoja de compartir del iPhone.');
+      } else {
+        downloadCsv();
+      }
+    } catch (error) {
+      if (error?.name !== 'AbortError') setStatus(`No se pudo compartir: ${error?.message || 'error desconocido'}`, true);
+    }
+  }
+  async function copyCsv() {
+    if (!samples.length) return;
+    try {
+      await navigator.clipboard.writeText(csvContent().replace(/^\uFEFF/,''));
+      setStatus('CSV copiado al portapapeles.');
+    } catch (error) {
+      setStatus('No se pudo copiar. Usa «Descargar CSV» o «Compartir / Guardar».', true);
+    }
+  }
+  function drawChart(canvas, data, yAbsMax) {
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width < 1) return;
+    const dpr = Math.min(window.devicePixelRatio || 1, 3);
+    const width = Math.round(rect.width*dpr);
+    const height = Math.round(rect.height*dpr);
+    if (canvas.width !== width || canvas.height !== height) { canvas.width = width; canvas.height = height; }
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    const w = rect.width, h = rect.height;
+    ctx.clearRect(0,0,w,h);
+    const paddingLeft = 5, paddingRight = 5, paddingTop = 8, paddingBottom = 8;
+    const plotW = w-paddingLeft-paddingRight, plotH = h-paddingTop-paddingBottom;
+    ctx.strokeStyle = '#2c3a4e'; ctx.lineWidth = 1;
+    for (let i=0;i<=4;i++) {
+      const y = paddingTop+i*plotH/4;
+      ctx.beginPath();ctx.moveTo(paddingLeft,y);ctx.lineTo(w-paddingRight,y);ctx.stroke();
+    }
+    for (let axis=0;axis<3;axis++) {
+      ctx.strokeStyle = chartColors[axis];ctx.lineWidth = 1.7;
+      ctx.beginPath();let began=false;
+      for (let i=0;i<data.length;i++) {
+        const value = data[i][axis];
+        if (value === null) {began=false;continue;}
+        const x = paddingLeft+(i/Math.max(CHART_LENGTH-1,1))*plotW;
+        const y = paddingTop+((yAbsMax-Math.max(-yAbsMax,Math.min(yAbsMax,value)))/(2*yAbsMax))*plotH;
+        if (!began) {ctx.moveTo(x,y);began=true;} else ctx.lineTo(x,y);
+      }
+      ctx.stroke();
+    }
+  }
+  function drawCharts() {
+    drawChart($('acc-chart'), accHistory, 20);
+    drawChart($('gyro-chart'), gyroHistory, 180);
+  }
+  connectBtn.addEventListener('click', connect);
+  disconnectBtn.addEventListener('click', stopSensors);
+  recordBtn.addEventListener('click', startRecording);
+  finishBtn.addEventListener('click', stopRecording);
+  downloadBtn.addEventListener('click', downloadCsv);
+  shareBtn.addEventListener('click', shareCsv);
+  copyBtn.addEventListener('click', copyCsv);
+  window.addEventListener('resize', drawCharts, {passive:true});
+  window.addEventListener('beforeunload', (event) => {
+    if (recording) { event.preventDefault(); event.returnValue = ''; }
+  });
+  setInterval(() => { if (recording) refreshStats(); }, 200);
+  refreshControls();
+  drawCharts();
+})();
+</script>
+</body>
+</html>
